@@ -1,0 +1,119 @@
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import pickle
+import os
+import numpy as np
+from typing import List
+
+# ── App Setup ────────────────────────────────────────────────────────────────
+app = FastAPI(
+    title="Iris Classifier API",
+    description="A trained RandomForest model wrapped in a REST API",
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Load Model ────────────────────────────────────────────────────────────────
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "model", "model.pkl")
+
+def load_model():
+    with open(MODEL_PATH, "rb") as f:
+        return pickle.load(f)
+
+model_data = load_model()
+model       = model_data["model"]
+class_names = model_data["classes"]
+
+# ── Schemas ───────────────────────────────────────────────────────────────────
+class IrisInput(BaseModel):
+    sepal_length: float = Field(..., example=5.1, description="Sepal length in cm")
+    sepal_width:  float = Field(..., example=3.5, description="Sepal width in cm")
+    petal_length: float = Field(..., example=1.4, description="Petal length in cm")
+    petal_width:  float = Field(..., example=0.2, description="Petal width in cm")
+
+class BatchInput(BaseModel):
+    samples: List[IrisInput]
+
+class PredictionResponse(BaseModel):
+    prediction:  str
+    class_index: int
+    confidence:  float
+    probabilities: dict
+
+class BatchResponse(BaseModel):
+    predictions: List[PredictionResponse]
+    total: int
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+@app.get("/", tags=["Health"])
+def root():
+    return {
+        "message": "Iris Classifier API is running 🌸",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+@app.get("/health", tags=["Health"])
+def health():
+    return {"status": "ok", "model": "RandomForestClassifier", "classes": class_names}
+
+@app.post("/predict", response_model=PredictionResponse, tags=["Inference"])
+def predict(data: IrisInput):
+    """
+    Predict the Iris species for a single flower sample.
+
+    **Example request:**
+    ```json
+    { "sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2 }
+    ```
+    **Expected response:**
+    ```json
+    { "prediction": "setosa", "class_index": 0, "confidence": 0.97, "probabilities": {...} }
+    ```
+    """
+    try:
+        features = np.array([[data.sepal_length, data.sepal_width,
+                               data.petal_length, data.petal_width]])
+        proba       = model.predict_proba(features)[0]
+        class_index = int(np.argmax(proba))
+        confidence  = float(proba[class_index])
+
+        return PredictionResponse(
+            prediction   = class_names[class_index],
+            class_index  = class_index,
+            confidence   = round(confidence, 4),
+            probabilities= {class_names[i]: round(float(p), 4) for i, p in enumerate(proba)},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/predict/batch", response_model=BatchResponse, tags=["Inference"])
+def predict_batch(data: BatchInput):
+    """
+    Predict Iris species for multiple flower samples at once.
+    """
+    results = []
+    for sample in data.samples:
+        features    = np.array([[sample.sepal_length, sample.sepal_width,
+                                  sample.petal_length, sample.petal_width]])
+        proba       = model.predict_proba(features)[0]
+        class_index = int(np.argmax(proba))
+        confidence  = float(proba[class_index])
+
+        results.append(PredictionResponse(
+            prediction   = class_names[class_index],
+            class_index  = class_index,
+            confidence   = round(confidence, 4),
+            probabilities= {class_names[i]: round(float(p), 4) for i, p in enumerate(proba)},
+        ))
+
+    return BatchResponse(predictions=results, total=len(results))
