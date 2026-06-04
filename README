@@ -1,0 +1,173 @@
+#  Iris Classifier API — Model Deployment with FastAPI + Docker
+
+A production-ready ML model deployment wrapping a trained RandomForest classifier in a REST API, containerized with Docker.
+
+---
+
+##  Project Structure
+
+```
+ml-api/
+├── app/
+│   └── main.py              # FastAPI application & endpoints
+├── model/
+│   ├── train_model.py       # Training script
+│   └── model.pkl            # Saved trained model
+├── tests/
+│   └── test_api.py          # Pytest test suite
+├── Dockerfile               # Multi-stage Docker build
+├── docker-compose.yml       # Docker Compose config
+├── requirements.txt         # Python dependencies
+├── sample_requests.sh       # cURL demo script
+└── README.md
+```
+
+---
+
+##  Quick Start
+
+### Option A — Run Locally (without Docker)
+
+```bash
+# 1. Clone & enter project
+git clone <your-repo-url>
+cd ml-api
+
+# 2. Create virtual environment
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Train the model (generates model/model.pkl)
+python model/train_model.py
+
+# 5. Start the API server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Option B — Run with Docker
+
+```bash
+# Build & run with Docker Compose (recommended)
+docker-compose up --build
+
+# OR build & run manually
+docker build -t iris-api .
+docker run -p 8000:8000 iris-api
+```
+
+---
+
+##  API Endpoints
+
+| Method | Endpoint          | Description                   |
+|--------|-------------------|-------------------------------|
+| GET    | `/`               | Welcome message               |
+| GET    | `/health`         | Health check + model info     |
+| POST   | `/predict`        | Single flower prediction      |
+| POST   | `/predict/batch`  | Batch flower predictions      |
+
+---
+
+##  Example Request & Response
+
+### Single Prediction
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}'
+```
+
+**Response:**
+```json
+{
+  "prediction": "setosa",
+  "class_index": 0,
+  "confidence": 0.97,
+  "probabilities": {
+    "setosa": 0.97,
+    "versicolor": 0.02,
+    "virginica": 0.01
+  }
+}
+```
+
+### Batch Prediction
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/predict/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "samples": [
+      {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2},
+      {"sepal_length": 6.3, "sepal_width": 3.3, "petal_length": 6.0, "petal_width": 2.5}
+    ]
+  }'
+```
+
+---
+
+## 🧪 Run Tests
+
+```bash
+pip install pytest httpx
+pytest tests/ -v
+```
+
+---
+
+##  Interactive API Docs
+
+Once the server is running, open:
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+
+---
+
+##  Docker Commands Reference
+
+```bash
+# Build image
+docker build -t iris-api .
+
+# Run container
+docker run -d -p 8000:8000 --name iris-api iris-api
+
+# View logs
+docker logs iris-api
+
+# Stop container
+docker stop iris-api
+
+# Remove container
+docker rm iris-api
+```
+
+---
+
+##  GitHub Setup
+
+```bash
+git init
+git add .
+git commit -m "Initial commit: FastAPI ML model deployment"
+git remote add origin https://github.com/<your-username>/iris-classifier-api.git
+git push -u origin main
+```
+
+---
+
+##  Model Info
+
+| Property   | Value                          |
+|------------|--------------------------------|
+| Dataset    | Iris (sklearn built-in)        |
+| Algorithm  | RandomForestClassifier         |
+| Accuracy   | 100% on test split             |
+| Classes    | setosa, versicolor, virginica  |
+| Features   | sepal/petal length & width     |
